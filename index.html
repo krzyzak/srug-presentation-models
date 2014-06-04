@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Title</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <style type="text/css">
+      @import url(http://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(http://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(http://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; }
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+      }
+
+      h1{
+        text-align: center;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
+
+      blockquote{
+        margin: 0 0 1.11111rem;
+        padding: 0.5rem 1.11111rem 0 1.05556rem;
+        border-left: 1px solid #ddd;
+      }
+      blockquote p{
+        margin: 0;
+      }
+
+      blockquote cite{
+        display: block;
+        font-size: 0.72222rem;
+        color: #555555;
+      }
+
+      blockquote cite:before{
+        content: "\2014 \0020";
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Don’t validate your models!
+
+### SRUG, 13.06.2014
+
+---
+
+class: center, middle
+
+# About me
+## Michał Krzyżanowski
+### pilot.co
+### @krzyzak
+
+---
+class: center, middle
+
+# „I follow SRP in my models”
+
+---
+
+
+<h1 class="center">Model responsibilities</h1>
+
+--
+
+1. Business logic
+--
+
+2. Persistence
+--
+
+3. Relations
+--
+
+4. Serialization
+--
+
+5. Callbacks
+--
+
+6. Validations
+
+---
+
+class: center
+
+# „I follow SRP in my models”
+
+--
+.center[![Default-aligned image](lol.png)]
+
+---
+class: center, middle
+
+# Model responsibilities (once again)
+
+---
+
+# Model responsibilities (once again)
+
+--
+1. (•_•) Business logic (being a model)
+
+2. ( •_•)>⌐■-■ Persistence (I hope that I finally cracked it, and hope that I’ll talk about this next time)
+
+3. (⌐■_■) Relations (It’s fantastic, as long as you’re not overusing them.)
+
+--
+
+4. (╯°□°）╯︵uoıʇɐzıןɐıɹǝs (Use serializers.)
+
+5. (╯°□°）╯︵sʞɔɐqןןɐɔ (Don’t use them. Period.)
+
+6. (╯°□°）╯︵suoıʇɐpıןɐʌ (Don’t use them. Period.)
+
+---
+
+class: center, middle
+
+# Callbacks are bad. Validations are bad.
+
+---
+
+# Let’s have a look at typical callbacks:
+
+```ruby
+class User &lt; ActiveRecord::Base
+  before_validation :generate_token
+  before_save :mark_as_banned, if: ->(u){ u.warnings.count > 3 }
+  after_save :deliver_notification
+  after_create :send_confirmation_email
+end
+
+```
+
+(These are collection of actual callbacks from my few previous projects)
+
+---
+
+class: center, middle
+
+# Refactor #1
+## Change names to more… appropiate
+
+---
+
+# Refactor #1
+
+```ruby
+class User &lt; ActiveRecord::Base
+  # :generate_token
+  before_validation :i_suck_and_i_cant_set_attributes_properly
+  # :mark_as_banned
+  before_save :conditional_validations_are_great_and_it_definitely_should_be_a_callback
+  # :deliver_notification
+  after_save :i_love_god_objects_so_sending_notifications_should_belong_to_user
+  # :send_confirmation_email
+  after_create :i_dont_know_what_context_means_plus_i_like_slow_tests
+end
+```
+
+--
+.center[![Default-aligned image](deal-with-it.gif)]
+---
+
+class: center, middle
+
+# Refactor # 2
+
+--
+
+## Enter ActiveInteraction
+
+---
+
+# Handling User signup
+
+```ruby
+class UserSignup &lt; ActiveInteraction::Base
+  # define your input
+  string :name, :email
+
+  # validate it
+
+  validates :name, length: { minimum: 10 }
+
+  def execute
+    User.create(data)
+  end
+
+  private
+  def data
+    inputs.merge(token: generate_token)
+  end
+
+  def generate_token
+    SecureRandom.hex(32)
+  end
+end
+```
+
+---
+
+# Handling sending signup email
+
+```ruby
+
+class SignupMailSender &lt; AcitveInteraction::Base
+  model :user
+
+  def execute
+    UserMailer.new(user: user).signup.deliver
+  end
+end
+```
+
+---
+
+# Combining interactions
+
+```ruby
+class SignupUserWithEmailConfirmation &lt; ActiveInteraction::Base
+  import_filters UserSignup
+
+  def execute
+    user = compose(UserSignup, inputs)
+    compose(SignupMailSender, user: user)
+  end
+end
+```
+
+---
+
+# Usage
+
+```ruby
+# somewhere in controller
+SignupUserWithEmailConfirmation.run!(params[:user])
+```
+
+--
+
+```ruby
+# somewhere in Admin console
+SignupUser.run!(params[:user])
+```
+
+--
+
+```ruby
+# somewhere in Resend signup email controller
+SignupMailSender.run!(params[:user])
+```
+
+
+---
+
+# Why should I bother?
+
+1. You’ve taken out two responsibilities out of model
+2. You’ve just decoupled sending emails from User model
+3. You don’t have to use attr_accessible or strong_params
+4. You don’t need conditional validations – each context should use its own Interaction
+5. You end up with **easier testable code**
+
+---
+
+# Note on testability
+
+<blockquote>„Let’s rewrite it using X, it will be easier to test it”.<cite>Random Rails dev</cite></blockquote>
+--
+
+.center[![Default-aligned image](bullshit-detected.png)]
+
+--
+
+<h2 class="center">Better testability should always be <strong><em>side effect</em></strong></h2>
+--
+<h2 class="center">…not a reason to write something that way.</h2>
+
+---
+
+# But I can create invalid model now!
+
+<blockquote>„But right now I can create (via rails console) invalid model, which would blow up my app!”.<cite>Another Random Rails dev</cite></blockquote>
+
+--
+
+.center[Yes, the same way that I can do it via ```psql``` in Rails Way™ approach]
+.center[![Default-aligned image](troll.png)]
+
+--
+
+<h2 class="center">But actually, I consider this as <strong><em>huge win</em></strong>.</h2>
+
+---
+
+# Creating invalid models – the good parts
+
+--
+1. You’re flexible (You just don’t care about already persisted models when you change your business logic)
+--
+
+
+2. You’re agile (how many times did you try to create model from scratch in console, and had issues with irrelevant validations?)
+--
+
+
+3. **You don’t need all that validations in unit tests**
+
+
+---
+
+# Lean factories
+
+```ruby
+FactoryGirl.define do
+  factory :user do
+    id { SecureRandom.uuid }
+    first_name "Jan"
+    second_name "Pawel"
+    last_name "Testowy"
+    association :activation
+    association :group
+    association :account
+  end
+end
+```
+--
+
+```ruby
+  FactoryGirl.create(:user) # What’s created with this invocation?
+```
+
+--
+
+```ruby
+FactoryGirl.define do
+  factory :user do
+    id { SecureRandom.uuid }
+    first_name "Jan"
+    second_name "Pawel"
+    last_name "Testowy"
+  end
+end
+```
+
+```ruby
+  FactoryGirl.create(:user) # Creates user! ;)
+```
+
+---
+
+# No need to test ActiveRecord internals
+
+```ruby
+# test/models/user_test.rb
+setup do
+  @user = FactoryGirl.build_stubbed(:user)
+end
+
+test "has valid factory" do
+  assert @user.valid?
+end
+
+test "is invalid without name" do
+  @user.name = nil
+  assert @user.invalid?
+end
+```
+--
+
+<h2 class="center">Is this <strong>really</strong> unit test?</h2>
+--
+
+<h2 class="center">Are you testing your model, or ActiveRecord validations?</h2>
+
+---
+
+# Creating invalid models – the bad parts
+
+1. You’ll never know if you have invalid data in database
+--
+…as long as you won’t use indices/DB constraints → not really an issue.
+--
+
+
+2. The is no one, obvious place to check which fields are required in model
+--
+
+…as long as you don’t have clear naming convention in your interactors → not really an issue.
+--
+
+3. Creates another layer of abstraction, makes your code less Rails Way (novice friendly)
+--
+ …Is this really an issue?
+--
+
+
+4. Adds another dependency (AKA: I don’t like ActiveInteraction)
+
+
+---
+
+class: center, middle
+
+# Good news: you don’t have to use ActiveInteraction!
+
+
+---
+
+# Interactor
+
+```ruby
+class AuthenticateUser
+  include Interactor
+
+  def perform
+    if user = User.authenticate(context[:email], context[:password])
+      context[:user] = user
+    else
+      context.fail!
+    end
+  end
+end
+
+```
+
+```ruby
+session_params = params.require(:session).permit(:email, :password)
+AuthenticateUser.perform(session_params)
+```
+
+---
+
+# Mutations
+
+```ruby
+class UserSignup &lt; Mutations::Command
+
+  # These inputs are required
+  required do
+    string :email, matches: EMAIL_REGEX
+    string :name
+  end
+
+  # These inputs are optional
+  optional do
+    boolean :newsletter_subscribe
+  end
+
+  def execute
+    user = User.create!(inputs)
+    if newsletter_subscribe
+      NewsletterSubscriptions.create(email: email, user_id: user.id)
+    end
+    UserMailer.async(:deliver_welcome, user.id)
+    user
+  end
+end
+```
+
+```ruby
+UserSignup.run(params[:user])
+```
+
+---
+
+class: center, middle
+
+# Last, but not least: PORO
+
+---
+
+# Recommended way to start: PORO
+
+```ruby
+class UserSignup
+  include ActiveModel::Model
+
+  attr_accessor :name, :email, :user
+
+  validates :name, presence: true
+
+  def create
+    @user = User.create!(attributes)
+    deliver_email
+    user
+  end
+
+  def deliver_email
+    UserMailer.new(user: user).signup.deliver
+  end
+end
+```
+
+```ruby
+UserSignup.new(user_params).create
+```
+---
+
+class: center, middle
+
+# Thanks!
+
+---
+
+class: center, middle
+
+# Questions?
+
+---
+
+# Resources
+
+* https://github.com/orgsync/active_interaction
+* https://github.com/cypriss/mutations
+* https://github.com/collectiveidea/interactor
+* https://en.wikipedia.org/wiki/Mediator_pattern
+* http://solnic.eu/2011/08/01/making-activerecord-models-thin.html
+
+
+    </textarea>
+    <script src="http://gnab.github.io/remark/downloads/remark-latest.min.js" type="text/javascript">
+    </script>
+    <script type="text/javascript">
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>

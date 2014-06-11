@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Title</title>
+    <title>Let’s talk about SRP in models</title>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <style type="text/css">
       @import url(http://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
@@ -44,7 +44,7 @@
 
 class: center, middle
 
-# Don’t validate your models!
+# Let’s talk about SRP in models…
 
 ### SRUG, 13.06.2014
 
@@ -54,14 +54,45 @@ class: center, middle
 
 # About me
 ## Michał Krzyżanowski
-### pilot.co
-### @krzyzak
+### Señor Developer @pilot.co
+### ![Default-aligned image](pilot.png)
+### ![Default-aligned image](github.png)krzyzak
 
+---
+class: bottom, right
+<small>(This slide intentionally left blank)</small>
+---
+
+<h1>Rails Application</h1>
+---
+
+<h1><del>Rails Application</del></h1>
+--
+<h1>Application that uses Rails</h1>
+
+---
+
+# SOLID
+
+--
+1. **S** Single responsibility principle
+--
+
+2. **O** Open/closed principle
+--
+
+3. **L** Liskov substitution principle
+--
+
+4. **I** Interface segregation principle
+--
+
+5. **D** Dependency inversion principle
 ---
 class: center, middle
 
-# „I follow SRP in my models”
-
+# <blockquote>„I follow SRP in my models”</blockquote>
+<blockquote><cite>Random Rails dev</cite></blockquote>
 ---
 
 
@@ -96,28 +127,31 @@ class: center
 .center[![Default-aligned image](lol.png)]
 
 ---
-class: center, middle
-
-# Model responsibilities (once again)
-
----
 
 # Model responsibilities (once again)
 
 --
-1. (•_•) Business logic (being a model)
-
-2. ( •_•)>⌐■-■ Persistence (I hope that I finally cracked it, and hope that I’ll talk about this next time)
-
-3. (⌐■_■) Relations (It’s fantastic, as long as you’re not overusing them.)
-
+1. (•_•) Business logic
 --
 
-4. (╯°□°）╯︵uoıʇɐzıןɐıɹǝs (Use serializers.)
 
-5. (╯°□°）╯︵sʞɔɐqןןɐɔ (Don’t use them. Period.)
+2. ( •_•)>⌐■-■ Persistence
+--
 
-6. (╯°□°）╯︵suoıʇɐpıןɐʌ (Don’t use them. Period.)
+
+3. (⌐■_■) Relations
+--
+
+
+4. (╯°□°）╯︵uoıʇɐzıןɐıɹǝs
+--
+
+
+5. (╯°□°）╯︵sʞɔɐqןןɐɔ
+--
+
+
+6. (╯°□°）╯︵suoıʇɐpıןɐʌ
 
 ---
 
@@ -135,6 +169,8 @@ class User &lt; ActiveRecord::Base
   before_save :mark_as_banned, if: ->(u){ u.warnings.count > 3 }
   after_save :deliver_notification
   after_create :send_confirmation_email
+
+  # (...)
 end
 
 ```
@@ -162,6 +198,8 @@ class User &lt; ActiveRecord::Base
   after_save :i_love_god_objects_so_sending_notifications_should_belong_to_user
   # :send_confirmation_email
   after_create :i_dont_know_what_context_means_plus_i_like_slow_tests
+
+  # (...)
 end
 ```
 
@@ -175,7 +213,21 @@ class: center, middle
 
 --
 
-## Enter ActiveInteraction
+## Meet Interactor pattern
+--
+
+### (with ActiveInteraction)
+
+---
+
+# User model
+
+```ruby
+class User &lt; ActiveRecord::Base
+end
+```
+--
+.center[![Default-aligned image](lolwut.jpg)]
 
 ---
 
@@ -185,6 +237,8 @@ class: center, middle
 class UserSignup &lt; ActiveInteraction::Base
   # define your input
   string :name, :email
+  string :company, default: nil
+  integer :age
 
   # validate it
 
@@ -263,10 +317,19 @@ SignupMailSender.run!(params[:user])
 
 # Why should I bother?
 
+--
 1. You’ve taken out two responsibilities out of model
+--
+
 2. You’ve just decoupled sending emails from User model
+--
+
 3. You don’t have to use attr_accessible or strong_params
+--
+
 4. You don’t need conditional validations – each context should use its own Interaction
+--
+
 5. You end up with **easier testable code**
 
 ---
@@ -292,7 +355,7 @@ SignupMailSender.run!(params[:user])
 
 --
 
-.center[Yes, the same way that I can do it via ```psql``` in Rails Way™ approach]
+.center[Yes, the same way that I can do it via ```psql``` with Rails Way™ approach]
 .center[![Default-aligned image](troll.png)]
 
 --
@@ -335,7 +398,7 @@ end
 --
 
 ```ruby
-  FactoryGirl.create(:user) # What’s created with this invocation?
+  FactoryGirl.create(:user) # Do you **really** know what are you doing?
 ```
 
 --
@@ -518,7 +581,9 @@ class: center, middle
 ---
 
 # Resources
-
+* http://krzyzak.github.io/srug-presentation-models
+* http://en.wikipedia.org/wiki/SOLID_(object-oriented_design)
+* http://en.wikipedia.org/wiki/Single_responsibility_principle
 * https://github.com/orgsync/active_interaction
 * https://github.com/cypriss/mutations
 * https://github.com/collectiveidea/interactor
